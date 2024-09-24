@@ -32,7 +32,7 @@
 
 ### 解决方法二
 
-在 Maven 项目中添加 spring-boot-maven-plugin 插件, 并配置 mainClass。
+在 Maven 项目中添加 maven-shade-plugin 插件, 并配置 mainClass。
 
 ```xml
 <build>
@@ -140,4 +140,83 @@
     </loggers>
 
 </Configuration>
+```
+
+## 3 SpringBoot 项目打包后, 仍然可以读取到 resources 目录下的文件
+
+```java
+ClassLoader classLoader = this.getClass().getClassLoader();
+// 读取到 resources 目录下的文件 picture/1.jpg
+InputStream originFileInputStream = classLoader.getResourceAsStream("/picture/1.jpg");
+
+// 需要临时保存下来, 可以转为 File
+
+// 创建一个临时目录来存储文件
+Path tempDir = Files.createTempDirectory("tempFiles");
+// 确定文件的最终路径
+Path filePath = tempDir.resolve("test.jpg");
+FileCopyUtils.copy(originFileInputStream, Files.newOutputStream(filePath));
+// 保存为文件
+File file = filePath.toFile();
+```
+
+## 4 首字符排序
+
+借助
+```xml
+<dependency>
+    <groupId>com.belerweb</groupId>
+    <artifactId>pinyin4j</artifactId>
+    <version>2.5.1</version>
+</dependency>
+```
+
+```java
+public static class A {
+
+    public A(String first, String secondName) {
+        this.firstName = first;
+        this.secondName = secondName;
+    }
+}
+
+public static int compareByPinyin(Main.A compareStr1, Main.A compareStr2) {
+    // 先按照 first name 排序
+    String str1 = getPinyinInitials(compareStr1.getFirstName()).toLowerCase();
+    String str2 = getPinyinInitials(compareStr2.getFirstName()).toLowerCase();
+    int compareStrResult =  str1.compareTo(str2);
+    if (compareStrResult != 0) {
+        return compareStrResult;
+    }
+
+    // 如果 first name 相同, 再按照 second name 排序
+    String str3 = getPinyinInitials(compareStr1.getSecondName()).toLowerCase();
+    String str4 = getPinyinInitials(compareStr2.getSecondName()).toLowerCase();
+    return str3.compareTo(str4);
+}
+
+public static String getPinyinInitials(String text) {
+    StringBuilder sb = new StringBuilder();
+    for (char c : text.toCharArray()) {
+        String[] pinyinArray = PinyinHelper.toHanyuPinyinStringArray(c);
+        if (pinyinArray != null && pinyinArray.length > 0) {
+            sb.append(pinyinArray[0]);
+        } else {
+            sb.append(c);
+        }
+    }
+    return sb.toString();
+}
+```
+
+直接使用官方内嵌的
+
+问题: Collator 在 Java 中, 中文使用的是 UNICODE 字符集, 大概收录了 6763 个汉字, 如果对应的汉字不在收录内, 会异常
+
+```java
+// 按照首字符排序
+List<A> buildNameOrderList = upgradeDevicePageVoList.stream()
+    .sorted(Comparator.comparing(A::getFirstName, Collator.getInstance(Locale.CHINA))
+        .thenComparing(A::getSecondName, Collator.getInstance(Locale.CHINA)))
+    .collect(Collectors.toList());
 ```
